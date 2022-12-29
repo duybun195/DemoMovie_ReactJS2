@@ -1,0 +1,21 @@
+.tb-sort {
+  th.th-sort {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    .btn-sorts {
+      width: 1.5rem;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+
+      .sort-icon {
+        float: right;
+        display: flex;
+        flex-direction: column;
+      }
+    }
+  }
+}

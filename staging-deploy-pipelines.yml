@@ -1,0 +1,86 @@
+trigger:
+  - staging-deploy
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: Build
+    displayName: Build stage
+    jobs:
+      - job: BuildJob
+        pool:
+          vmImage: "ubuntu-20.04"
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: "14.x"
+            displayName: "Install Node.js"
+
+          - script: |
+              yarn install
+              yarn build:staging
+            displayName: "yarn install yarn build"
+          - task: ArchiveFiles@2
+            displayName: "Archive files"
+            inputs:
+              rootFolderOrFile: "$(System.DefaultWorkingDirectory)/build/"
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+              replaceExistingArchive: true
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: "$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip"
+              ArtifactName: "drop"
+              publishLocation: "Container"
+
+  - stage: "Deploy"
+    displayName: "Deploy WMS React Beta"
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - deployment: "DeployToBeta"
+        displayName: "Deploy WMS to testing server"
+        pool:
+          name: Matxi Dev
+        variables:
+          Parameters.WebsiteName: "wms-test.matxiholdings.net"
+          Parameters.WebsitePhysicalPath: '%SystemDrive%\Publish\wmstest'
+          Parameters.AppPoolName: "wms-test.matxiholdings.net"
+          Parameters.Package: '$(Pipeline.Workspace)\drop\$(Build.BuildId).zip'
+          Parameters.VirtualPathForApplication: ""
+        environment:
+          name: Matxi Dev
+
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: IISWebAppManagementOnMachineGroup@0
+                  displayName: "IIS Web App Manage"
+                  inputs:
+                    Bindings: "$(Parameters.Bindings)"
+                    IISDeploymentType: "IISWebsite"
+                    ActionIISWebsite: "CreateOrUpdateWebsite"
+                    WebsiteName: "$(Parameters.WebsiteName)"
+                    WebsitePhysicalPath: "$(Parameters.WebsitePhysicalPath)"
+                    AddBinding: false
+                    ParentWebsiteNameForVD: "$(Parameters.WebsiteName)"
+                    VirtualPathForVD: "$(Parameters.VirtualPathForApplication)"
+                    ParentWebsiteNameForApplication: "$(Parameters.WebsiteName)"
+                    VirtualPathForApplication: "$(Parameters.VirtualPathForApplication)"
+                    AppPoolName: "$(Parameters.AppPoolName)"
+                    AppPoolNameForApplication: ""
+                    AppPoolNameForWebsite: "wms-test.matxiholdings.net"
+
+                - task: IISWebAppDeploymentOnMachineGroup@0
+                  displayName: "IIS Web App Deploy"
+                  inputs:
+                    WebSiteName: "$(Parameters.WebsiteName)"
+                    Package: "$(Parameters.Package)"
+                    RemoveAdditionalFilesFlag: true
+                    TakeAppOfflineFlag: true
+                    XmlTransformation: true
+                    XmlVariableSubstitution: true
